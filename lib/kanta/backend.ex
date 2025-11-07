@@ -19,6 +19,7 @@ defmodule Kanta.Backend do
   * `:otp_app` - The OTP application that contains the backend
   * `:priv` - The directory where the translations are stored (defaults to "priv/YOUR_MODULE")
   * `:kanta_adapter` - The adapter module to use for database lookups (defaults to `Kanta.Backend.Adapter.CachedDB`)
+  * `:fallback_locale` - The locale to fallback to when a translation is not found (defaults to "en")
 
   it also accepts all the Gettext.Backend options. See the official Gettext documentation for more details.
 
@@ -32,7 +33,8 @@ defmodule Kanta.Backend do
       require Logger
       @flag_file Path.join([Mix.Project.build_path(), "kanta_recompile", ".gettext_recompiled"])
       @adapter Keyword.get(opts, :kanta_adapter, Kanta.Backend.Adapter.CachedDB)
-      opts = Keyword.drop(opts, [:kanta_adapter])
+      @fallback_locale Keyword.get(opts, :fallback_locale, "en")
+      opts = Keyword.drop(opts, [:kanta_adapter, :fallback_locale])
       # Generate fallback Gettext backend form PO files
       use Kanta.Backend.GettextFallback, opts
 
@@ -56,7 +58,7 @@ defmodule Kanta.Backend do
       end
 
       def handle_missing_translation(locale, domain, msgctxt, msgid, bindings) do
-        case Kanta.Backend.Adapter.CachedDB.lgettext(
+        case @adapter.lgettext(
                locale,
                domain,
                msgctxt,
@@ -68,7 +70,15 @@ defmodule Kanta.Backend do
 
           {:error, :not_found} ->
             backend = fallback_backend()
-            backend.lgettext(locale, domain, msgctxt, msgid, bindings)
+            po_result = backend.lgettext(locale, domain, msgctxt, msgid, bindings)
+
+            # If translation not found in PO files and locale is not the fallback locale,
+            # try to get translation from fallback locale
+            if locale != @fallback_locale do
+              handle_missing_translation(@fallback_locale, domain, msgctxt, msgid, bindings)
+            else
+              {:ok, po_result}
+            end
         end
       end
 
@@ -81,7 +91,7 @@ defmodule Kanta.Backend do
             n,
             bindings
           ) do
-        case Kanta.Backend.Adapter.CachedDB.lngettext(
+        case @adapter.lngettext(
                locale,
                domain,
                msgctxt,
@@ -96,15 +106,32 @@ defmodule Kanta.Backend do
           {:error, :not_found} ->
             backend = fallback_backend()
 
-            backend.lngettext(
-              locale,
-              domain,
-              msgctxt,
-              msgid,
-              msgid_plural,
-              n,
-              bindings
-            )
+            po_result =
+              backend.lngettext(
+                locale,
+                domain,
+                msgctxt,
+                msgid,
+                msgid_plural,
+                n,
+                bindings
+              )
+
+            # If translation not found in PO files and locale is not the fallback locale,
+            # try to get translation from fallback locale
+            if locale != @fallback_locale do
+              handle_missing_plural_translation(
+                @fallback_locale,
+                domain,
+                msgctxt,
+                msgid,
+                msgid_plural,
+                n,
+                bindings
+              )
+            else
+              {:ok, po_result}
+            end
         end
       end
 
