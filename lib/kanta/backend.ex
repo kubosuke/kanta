@@ -77,7 +77,7 @@ defmodule Kanta.Backend do
             if locale != @fallback_locale do
               handle_missing_translation(@fallback_locale, domain, msgctxt, msgid, bindings)
             else
-              {:ok, po_result}
+              po_result
             end
         end
       end
@@ -130,7 +130,7 @@ defmodule Kanta.Backend do
                 bindings
               )
             else
-              {:ok, po_result}
+              po_result
             end
         end
       end
