@@ -127,6 +127,8 @@ defmodule Kanta.Backend.Adapter.CachedDB do
     apply_bindings(text, Map.new(bindings))
   end
 
+  defp apply_bindings(text, _bindings) when is_nil(text), do: {:error, :not_found}
+
   defp apply_bindings(text, bindings) do
     case Gettext.Interpolation.Default.runtime_interpolate(text, bindings) do
       {:ok, interpolated} ->
