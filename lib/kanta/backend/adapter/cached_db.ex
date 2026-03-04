@@ -81,7 +81,8 @@ defmodule Kanta.Backend.Adapter.CachedDB do
   """
   @impl true
   def lngettext(locale, domain, msgctxt, _msgid, msgid_plural, n, bindings) do
-    with {:ok, %Locale{id: locale_id, plurals_header: plurals_header}} <-
+    with {:ok, %Locale{id: locale_id, plurals_header: plurals_header}}
+         when not is_nil(plurals_header) <-
            Translations.get_locale(filter: [iso639_code: locale]),
          {:ok, %Domain{id: domain_id}} <-
            Translations.get_domain(filter: [name: domain]),
@@ -97,7 +98,7 @@ defmodule Kanta.Backend.Adapter.CachedDB do
            ),
          {:ok, plurals_options} <- Expo.PluralForms.parse(plurals_header),
          nplural_index <- Expo.PluralForms.index(plurals_options, n),
-         {:ok, %PluralTranslation{translated_text: text}} <-
+         {:ok, %PluralTranslation{translated_text: text}} when not is_nil(text) <-
            Translations.get_plural_translation(
              filter: [
                locale_id: locale_id,
