@@ -20,29 +20,31 @@ defmodule Kanta.Utils.ModuleFolder do
       iex> ModuleFolder.safe_folder_name("Elixir.MyApp.Module", replace_with: "-")
       "MyApp-Module"
   """
-  def safe_folder_name(module) when is_atom(module) or is_binary(module) do
-    replacement = "_"
+  def safe_folder_name(_), do: "gettext"
 
-    module
-    |> module_to_string()
-    |> remove_elixir_prefix()
-    |> replace_invalid_chars(replacement)
-    |> String.downcase()
-  end
+  # def safe_folder_name(module) when is_atom(module) or is_binary(module) do
+  #   replacement = "_"
 
-  defp module_to_string(module) when is_atom(module), do: Atom.to_string(module)
-  defp module_to_string(module) when is_binary(module), do: module
+  #   module
+  #   |> module_to_string()
+  #   |> remove_elixir_prefix()
+  #   |> replace_invalid_chars(replacement)
+  #   |> String.downcase()
+  # end
 
-  defp remove_elixir_prefix("Elixir." <> rest), do: rest
-  defp remove_elixir_prefix(other), do: other
+  # defp module_to_string(module) when is_atom(module), do: Atom.to_string(module)
+  # defp module_to_string(module) when is_binary(module), do: module
 
-  defp replace_invalid_chars(name, replacement) do
-    # Replace characters that are invalid in folder names
-    name
-    |> String.replace(~r/[^\w\-\.]/, replacement)
-    # Collapse multiple replacements
-    |> String.replace(~r/#{replacement}+/, replacement)
-    # Comply with Windows naming rules
-    |> String.trim_trailing(".")
-  end
+  # defp remove_elixir_prefix("Elixir." <> rest), do: rest
+  # defp remove_elixir_prefix(other), do: other
+
+  # defp replace_invalid_chars(name, replacement) do
+  #   # Replace characters that are invalid in folder names
+  #   name
+  #   |> String.replace(~r/[^\w\-\.]/, replacement)
+  #   # Collapse multiple replacements
+  #   |> String.replace(~r/#{replacement}+/, replacement)
+  #   # Comply with Windows naming rules
+  #   |> String.trim_trailing(".")
+  # end
 end
