@@ -32,18 +32,21 @@ defmodule Kanta.Backend do
       require Logger
       @flag_file Path.join([Mix.Project.build_path(), "kanta_recompile", ".gettext_recompiled"])
       @adapter Keyword.get(opts, :kanta_adapter, Kanta.Backend.Adapter.CachedDB)
-      opts = Keyword.drop(opts, [:kanta_adapter])
+      opts_with_priv =
+        opts
+        |> Keyword.drop([:kanta_adapter])
+        |> Keyword.put_new(:priv, "priv/#{ModuleFolder.safe_folder_name(__MODULE__)}")
+
       # Generate fallback Gettext backend form PO files
-      use Kanta.Backend.GettextFallback, opts
+      use Kanta.Backend.GettextFallback, opts_with_priv
 
       # When `mix gettext extract` create POT/PO files based on this backend usage (ex. getext(...) call) across the application codebase.
       if Gettext.Extractor.extracting?() do
-        use Gettext.Backend, opts
+        use Gettext.Backend, opts_with_priv
 
         Kanta.Utils.GettextRecompiler.setup_recompile_flag(@flag_file)
       else
-        opts = Keyword.merge(opts, priv: "priv/#{ModuleFolder.safe_folder_name(__MODULE__)}")
-        use Gettext.Backend, opts
+        use Gettext.Backend, opts_with_priv
       end
 
       def __mix_recompile__?() do
