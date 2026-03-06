@@ -113,7 +113,13 @@ defmodule Kanta.Backend.Adapter.CachedDB do
     end
   end
 
-  defp maybe_get_context_id(nil), do: {:ok, nil}
+  # Gettext uses msgctxt nil for gettext/dgettext; Kanta V04 migrates messages to "default" context.
+  defp maybe_get_context_id(nil) do
+    case Translations.get_context(filter: [name: "default"]) do
+      {:ok, %Context{} = context} -> {:ok, context.id}
+      _ -> {:ok, nil}
+    end
+  end
 
   defp maybe_get_context_id(msgctxt) do
     case Translations.get_context(filter: [name: msgctxt]) do

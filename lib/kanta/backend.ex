@@ -37,16 +37,20 @@ defmodule Kanta.Backend do
         |> Keyword.drop([:kanta_adapter])
         |> Keyword.put_new(:priv, "priv/#{ModuleFolder.safe_folder_name(__MODULE__)}")
 
-      # Generate fallback Gettext backend form PO files
+      # Main backend uses an empty priv so every lookup goes to handle_missing_translation,
+      # giving order: Kanta -> PO (via fallback) -> for non-en: en Kanta -> en PO -> msgid.
+      opts_main_backend = Keyword.put(opts_with_priv, :priv, opts_with_priv[:priv] <> "_kanta_lookup")
+
+      # Generate fallback Gettext backend from PO files (real priv)
       use Kanta.Backend.GettextFallback, opts_with_priv
 
       # When `mix gettext extract` create POT/PO files based on this backend usage (ex. getext(...) call) across the application codebase.
       if Gettext.Extractor.extracting?() do
-        use Gettext.Backend, opts_with_priv
+        use Gettext.Backend, opts_main_backend
 
         Kanta.Utils.GettextRecompiler.setup_recompile_flag(@flag_file)
       else
-        use Gettext.Backend, opts_with_priv
+        use Gettext.Backend, opts_main_backend
       end
 
       def __mix_recompile__?() do
@@ -59,19 +63,26 @@ defmodule Kanta.Backend do
       end
 
       def handle_missing_translation(locale, domain, msgctxt, msgid, bindings) do
-        case Kanta.Backend.Adapter.CachedDB.lgettext(
-               locale,
-               domain,
-               msgctxt,
-               msgid,
-               bindings
-             ) do
+        # 1. Kanta for requested locale
+        case @adapter.lgettext(locale, domain, msgctxt, msgid, bindings) do
           {:ok, translation} ->
             {:ok, translation}
 
           {:error, :not_found} ->
+            # 2. PO for requested locale
             backend = fallback_backend()
-            backend.lgettext(locale, domain, msgctxt, msgid, bindings)
+
+            case backend.lgettext(locale, domain, msgctxt, msgid, bindings) do
+              {:ok, translation} ->
+                {:ok, translation}
+
+              {:default, _} when locale != "en" ->
+                # 3. For non-en: en Kanta, then en PO, then msgid
+                try_en_fallback_singular(domain, msgctxt, msgid, bindings, backend)
+
+              result ->
+                result
+            end
         end
       end
 
@@ -84,7 +95,8 @@ defmodule Kanta.Backend do
             n,
             bindings
           ) do
-        case Kanta.Backend.Adapter.CachedDB.lngettext(
+        # 1. Kanta for requested locale
+        case @adapter.lngettext(
                locale,
                domain,
                msgctxt,
@@ -97,17 +109,88 @@ defmodule Kanta.Backend do
             {:ok, translation}
 
           {:error, :not_found} ->
+            # 2. PO for requested locale
             backend = fallback_backend()
 
-            backend.lngettext(
-              locale,
-              domain,
-              msgctxt,
-              msgid,
-              msgid_plural,
-              n,
-              bindings
-            )
+            case backend.lngettext(
+                   locale,
+                   domain,
+                   msgctxt,
+                   msgid,
+                   msgid_plural,
+                   n,
+                   bindings
+                 ) do
+              {:ok, translation} ->
+                {:ok, translation}
+
+              {:default, _} when locale != "en" ->
+                # 3. For non-en: en Kanta, then en PO, then msgid
+                try_en_fallback_plural(
+                  domain,
+                  msgctxt,
+                  msgid,
+                  msgid_plural,
+                  n,
+                  bindings,
+                  backend
+                )
+
+              result ->
+                result
+            end
+        end
+      end
+
+      defp try_en_fallback_singular(domain, msgctxt, msgid, bindings, backend) do
+        case @adapter.lgettext("en", domain, msgctxt, msgid, bindings) do
+          {:ok, translation} ->
+            {:ok, translation}
+
+          {:error, :not_found} ->
+            case backend.lgettext("en", domain, msgctxt, msgid, bindings) do
+              {:ok, translation} -> {:ok, translation}
+              _ -> {:default, msgid}
+            end
+        end
+      end
+
+      defp try_en_fallback_plural(
+             domain,
+             msgctxt,
+             msgid,
+             msgid_plural,
+             n,
+             bindings,
+             backend
+           ) do
+        case @adapter.lngettext(
+               "en",
+               domain,
+               msgctxt,
+               msgid,
+               msgid_plural,
+               n,
+               bindings
+             ) do
+          {:ok, translation} ->
+            {:ok, translation}
+
+          {:error, :not_found} ->
+            case backend.lngettext(
+                   "en",
+                   domain,
+                   msgctxt,
+                   msgid,
+                   msgid_plural,
+                   n,
+                   bindings
+                 ) do
+              {:ok, translation} -> {:ok, translation}
+              _ ->
+                selected_msgid = if n == 1, do: msgid, else: msgid_plural
+                {:default, selected_msgid}
+            end
         end
       end
 
